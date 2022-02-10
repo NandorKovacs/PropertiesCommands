@@ -3,6 +3,14 @@ package net.roaringmind.propertiescommands;
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
+
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -24,7 +32,19 @@ public class PropertiesCommands implements ModInitializer {
   public void onInitialize() {
 // @formatter:off
     CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
+      if (!dedicated) {
+        LOGGER.warn("did not register commands because this is not a dedicated server");
+        return;
+      }
+      // dispatcher.register(literal("opme")
+      //   .executes((ctx) -> {
+      //     ctx.getSource().getPlayer().getServer().getPlayerManager().addToOperators(ctx.getSource().getPlayer().getGameProfile());
+      //     return 0;
+      //   })
+      // );
+
       dispatcher.register(literal("server-properties")
+      .requires(source -> source.hasPermissionLevel(4))
         .then(literal("enable-jmx-monitoring").then(
           argument("bool", BoolArgumentType.bool())
             .executes(this::enableJMXMonitoring)
@@ -99,12 +119,17 @@ public class PropertiesCommands implements ModInitializer {
         )
         .then(literal("max-players").then(
           argument("int", IntegerArgumentType.integer())
-            .executes(this::maxTickTime)
+            .executes(this::maxPlayers)
           )
         )
         .then(literal("online-mode").then(
           argument("bool", BoolArgumentType.bool())
             .executes(this::onlineMode)
+          )
+        )
+        .then(literal("enable-status").then(
+          argument("bool", BoolArgumentType.bool())
+            .executes(this::enableStatus)
           )
         )
         .then(literal("allow-flight").then(
@@ -160,6 +185,11 @@ public class PropertiesCommands implements ModInitializer {
         .then(literal("prevent-proxy-connections").then(
           argument("bool", BoolArgumentType.bool())
             .executes(this::preventProxyConnections)
+          )
+        )
+        .then(literal("hide-online-players").then(
+          argument("bool", BoolArgumentType.bool())
+            .executes(this::hideOnlinePlayers)
           )
         )
         .then(literal("resource-pack").then(
@@ -267,191 +297,259 @@ public class PropertiesCommands implements ModInitializer {
 // @formatter:on
   }
 
+  Boolean setProperty(String name, String value) {
+    Path path = Paths.get("server.properties", new String[0]);
+    Properties properties = new Properties();
+    FileReader reader;
+
+    try {
+      reader = new FileReader(path.toFile());
+    } catch (FileNotFoundException e) {
+      LOGGER.error("failed to create server.properties reader");
+      return true;
+    }
+
+    try {
+      properties.load(reader);
+    } catch (IOException e) {
+      LOGGER.error("failed to load properties");
+      return true;
+    }
+
+    try {
+      reader.close();
+    } catch (IOException e1) {
+      LOGGER.error("failed to close reader");
+      return true;
+    }
+
+    if (!properties.containsKey(name)) {
+      return true;
+    }
+
+    properties.setProperty(name, value);
+
+    FileWriter writer;
+
+    try {
+      writer = new FileWriter(path.toFile());
+    } catch (IOException e) {
+      LOGGER.error("failed to create server.properties writer");
+      return true;
+    }
+
+    try {
+      properties.store(writer, "");
+    } catch (IOException e) {
+      LOGGER.error("failed to write server.properties");
+      return true;
+    }
+
+    try {
+      writer.close();
+    } catch (IOException e) {
+      LOGGER.error("failed to close writer");
+      return true;
+    }
+    return false;
+  }
+
   Integer enableJMXMonitoring(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("enable-jmx-monitoring", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer rconPort(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("rcon.port", String.valueOf(IntegerArgumentType.getInteger(ctx, "port"))) ? 1 : 0;
   }
 
   Integer gamemode(CommandContext<ServerCommandSource> ctx, GameMode mode) {
-    return 0;
+    return setProperty("gamemode", mode.getName()) ? 1 : 0;
   }
 
   Integer enableCommandBlock(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("enable-command-block", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer enableQuery(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("enable-query", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer levelName(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("level-name", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer motd(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("motd", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer queryPort(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("query.port", String.valueOf(IntegerArgumentType.getInteger(ctx, "port"))) ? 1 : 0;
   }
 
   Integer pvp(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("pvp", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer difficulty(CommandContext<ServerCommandSource> ctx, Difficulty difficulty) {
-    return 0;
+    return setProperty("difficulty", difficulty.getName()) ? 1 : 0;
   }
 
   Integer networkCompressionTreshold(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("network-compression-threshold", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1
+        : 0;
   }
 
   Integer requireResourcePack(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("require-resource-pack", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer maxTickTime(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("max-tick-time", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer useNativeTransport(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("use-native-transport", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
+  }
+
+  Integer maxPlayers(CommandContext<ServerCommandSource> ctx) {
+    return setProperty("max-players", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer onlineMode(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("online-mode", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer enableStatus(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("enable-status", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer allowFlight(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("allow-flight", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer broadcastRconToOps(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("broadcast-rcon-to-ops", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer viewDistance(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("view-distance", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer serverIp(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("server-ip", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer resourcePackPrompt(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("resource-pack-prompt", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer allowNether(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("allow-nether", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer serverPort(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("server-port", String.valueOf(IntegerArgumentType.getInteger(ctx, "port"))) ? 1 : 0;
   }
 
   Integer enableRcon(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("enable-rcon", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer syncChunkWrites(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("sync-chunk-writes", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer opPermissionLevel(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("op-permission-level", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer preventProxyConnections(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("prevent-proxy-connections", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
+  }
+
+  Integer hideOnlinePlayers(CommandContext<ServerCommandSource> ctx) {
+    return setProperty("hide-online-players", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer resourcePack(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("resource-pack", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer entityBroadcastRangePercentage(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("entity-broadcast-range-percentage", String.valueOf(IntegerArgumentType.getInteger(ctx, "int")))
+        ? 1
+        : 0;
   }
 
   Integer simulationDistance(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("simulation-distance", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer rconPassword(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("rcon.password", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer playerIdleTimeout(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("player-idle-timeout", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer forceGamemode(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("force-gamemode", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer rateLimit(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("rate-limit", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer hardcore(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("hardcore", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer whiteList(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("white-list", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer broadcastConsoleToOps(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("broadcast-console-to-ops", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer spawnNpcs(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("spawn-npcs", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer spawnAnimals(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("spawn-animals", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer snooperEnabled(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("snooper-enabled", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer functionPermissionLevel(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("function-permission-level", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer textFilteringConfig(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("text-filtering-config", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer spawnMonsters(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("spawn-monsters", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer enforceWhitelist(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("enforce-whitelist", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer resourcePackSHA1(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("resource-pack-sha1", StringArgumentType.getString(ctx, "string")) ? 1 : 0;
   }
 
   Integer spawnProtection(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("spawn-protection", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 
   Integer maxWorldSize(CommandContext<ServerCommandSource> ctx) {
-    return 0;
+    return setProperty("max-world-size", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1 : 0;
   }
 }
