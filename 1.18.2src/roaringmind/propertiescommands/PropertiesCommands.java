@@ -20,7 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameMode;
@@ -31,8 +31,8 @@ public class PropertiesCommands implements ModInitializer {
   @Override
   public void onInitialize() {
 // @formatter:off
-    CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, dedicated) -> {
-      if (!dedicated.dedicated) {
+    CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
+      if (!dedicated) {
         LOGGER.warn("did not register commands because this is not a dedicated server");
         return;
       }
@@ -47,21 +47,6 @@ public class PropertiesCommands implements ModInitializer {
 
       dispatcher.register(literal("server-properties")
       .requires(source -> source.hasPermissionLevel(4))
-        .then(literal("max-chained-neighbor-updates").then(
-          argument("int", IntegerArgumentType.integer())
-            .executes(this::maxChainedNeighborUpdates)
-          )
-        )
-        .then(literal("previews-chat").then(
-          argument("bool", BoolArgumentType.bool())
-            .executes(this::previewsChat)
-          )
-        )
-        .then(literal("enforce-secure-profile").then(
-          argument("bool", BoolArgumentType.bool())
-            .executes(this::enforceSecureProfile)
-          )
-        )
         .then(literal("enable-jmx-monitoring").then(
           argument("bool", BoolArgumentType.bool())
             .executes(this::enableJMXMonitoring)
@@ -416,21 +401,8 @@ public class PropertiesCommands implements ModInitializer {
         : 0;
   }
 
-  Integer maxChainedNeighborUpdates(CommandContext<ServerCommandSource> ctx) {
-    return setProperty("max-chained-neighbor-updates", String.valueOf(IntegerArgumentType.getInteger(ctx, "int"))) ? 1
-        : 0;
-  }
-
   Integer requireResourcePack(CommandContext<ServerCommandSource> ctx) {
     return setProperty("require-resource-pack", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
-  }
-  
-  Integer previewsChat(CommandContext<ServerCommandSource> ctx) {
-    return setProperty("previews-chat", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
-  }
-
-  Integer enforceSecureProfile(CommandContext<ServerCommandSource> ctx) {
-    return setProperty("enforce-secure-profile", String.valueOf(BoolArgumentType.getBool(ctx, "bool"))) ? 1 : 0;
   }
 
   Integer maxTickTime(CommandContext<ServerCommandSource> ctx) {
